@@ -4,7 +4,13 @@ import os
 from discord.ext import commands, tasks
 
 TOKEN = os.getenv("TOKEN")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+
+channel_id = os.getenv("CHANNEL_ID")
+
+if channel_id is None:
+    raise Exception("CHANNEL_ID is missing in Railway variables")
+
+CHANNEL_ID = int(channel_id)
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
