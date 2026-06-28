@@ -1,7 +1,6 @@
 import discord
 import requests
 import os
-import random
 from discord.ext import commands, tasks
 from datetime import datetime, time
 
@@ -20,7 +19,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === QUOTE API ===
+# === GET QUOTE ===
 def get_quote():
     try:
         r = requests.get("https://zenquotes.io/api/random", timeout=10)
@@ -29,22 +28,28 @@ def get_quote():
     except:
         return "Keep going.", "Unknown"
 
-# === MOOD STYLES ===
-def style(mood):
-    styles = {
-        "sad": ("💔 Sad Quote", 0x2b2d31),
-        "motivational": ("🔥 Motivational Quote", 0xf1c40f),
-        "dark": ("🖤 Dark Quote", 0x000000),
-        "random": ("⌬ Quote", 0x5865F2)
-    }
-    return styles.get(mood, styles["random"])
-
-# === COMMAND ===
+# === !quote COMMAND (FIXED MOODS) ===
 @bot.command()
 async def quote(ctx, mood="random"):
-    quote, author = get_quote()
 
-    title, color = style(mood)
+    quote, author = get_quote()
+    mood = mood.lower()
+
+    if mood == "sad":
+        title = "💔 Sad Quote"
+        color = 0x2b2d31
+
+    elif mood == "motivational":
+        title = "🔥 Motivational Quote"
+        color = 0xf1c40f
+
+    elif mood == "dark":
+        title = "🖤 Dark Quote"
+        color = 0x000000
+
+    else:
+        title = "⌬ Quote"
+        color = 0x5865F2
 
     embed = discord.Embed(
         title=title,
@@ -52,23 +57,17 @@ async def quote(ctx, mood="random"):
         color=color
     )
 
-    message = await ctx.send(embed=embed)
-
-    await message.add_reaction("👍")
-    await message.add_reaction("❤️")
-    await message.add_reaction("🔥")
+    await ctx.send(embed=embed)
 
 # === DAILY QUOTE ===
 @tasks.loop(minutes=1)
 async def daily_quote():
     now = datetime.utcnow().time()
-
-    # 6 PM UTC daily
-    target = time(hour=18, minute=0)
+    target = time(hour=18, minute=0)  # 6PM UTC
 
     if now.hour == target.hour and now.minute == target.minute:
         channel = bot.get_channel(CHANNEL_ID)
-        if channel is None:
+        if not channel:
             return
 
         quote, author = get_quote()
@@ -79,11 +78,7 @@ async def daily_quote():
             color=0x5865F2
         )
 
-        message = await channel.send(embed=embed)
-
-        await message.add_reaction("👍")
-        await message.add_reaction("❤️")
-        await message.add_reaction("🔥")
+        await channel.send(embed=embed)
 
 # === START BOT ===
 @bot.event
