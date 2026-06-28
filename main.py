@@ -4,7 +4,7 @@ import os
 from discord.ext import commands, tasks
 from datetime import datetime, time
 
-# === ENV VARIABLES ===
+# === ENV ===
 TOKEN = os.getenv("TOKEN")
 
 channel_id = os.getenv("CHANNEL_ID")
@@ -13,22 +13,27 @@ if not channel_id:
 
 CHANNEL_ID = int(channel_id)
 
-# === BOT SETUP ===
+# === INTENTS (IMPORTANT) ===
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === GET QUOTE ===
+# === DEBUG: confirm bot works ===
+@bot.command()
+async def test(ctx):
+    await ctx.send("✅ bot is working")
+
+# === QUOTE API ===
 def get_quote():
     try:
         r = requests.get("https://zenquotes.io/api/random", timeout=10)
         data = r.json()[0]
         return data["q"], data["a"]
-    except:
-        return "Keep going.", "Unknown"
+    except Exception as e:
+        return "Error getting quote", "API"
 
-# === !quote COMMAND (FIXED MOODS) ===
+# === !quote COMMAND ===
 @bot.command()
 async def quote(ctx, mood="random"):
 
@@ -63,11 +68,12 @@ async def quote(ctx, mood="random"):
 @tasks.loop(minutes=1)
 async def daily_quote():
     now = datetime.utcnow().time()
-    target = time(hour=18, minute=0)  # 6PM UTC
+    target = time(hour=18, minute=0)
 
     if now.hour == target.hour and now.minute == target.minute:
         channel = bot.get_channel(CHANNEL_ID)
         if not channel:
+            print("Channel not found")
             return
 
         quote, author = get_quote()
@@ -80,11 +86,10 @@ async def daily_quote():
 
         await channel.send(embed=embed)
 
-# === START BOT ===
+# === START ===
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
     daily_quote.start()
 
 bot.run(TOKEN)
-
