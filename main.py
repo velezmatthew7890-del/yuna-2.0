@@ -3,12 +3,18 @@ import requests
 import os
 import json
 from discord.ext import commands, tasks
-from datetime import datetime, time
+from datetime import datetime
 
 # =====================
-# ENV
+# ENV SETUP
 # =====================
 TOKEN = os.getenv("TOKEN")
+
+channel_id = os.getenv("CHANNEL_ID")
+if not channel_id:
+    raise Exception("CHANNEL_ID is missing in Railway variables")
+
+CHANNEL_ID = int(channel_id)
 
 # =====================
 # BOT SETUP
@@ -17,43 +23,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-# =====================
-# DATABASE (server -> channel)
-# =====================
-DB_FILE = "channels.json"
-
-def load_data():
-    try:
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-def save_data(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f)
-
-channel_data = load_data()
-
-# =====================
-# TEST COMMAND
-# =====================
-@bot.command()
-async def test(ctx):
-    await ctx.send("✅ bot is working")
-
-# =====================
-# SETUP COMMAND (IMPORTANT)
-# =====================
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def setup(ctx, channel: discord.TextChannel):
-
-    channel_data[str(ctx.guild.id)] = channel.id
-    save_data(channel_data)
-
-    await ctx.send(f"✅ Quote channel set to {channel.mention}")
 
 # =====================
 # QUOTE API
@@ -67,12 +36,12 @@ def get_quote():
         return "Keep going.", "Unknown"
 
 # =====================
-# QUOTE COMMAND
+# MOOD COMMAND
 # =====================
 @bot.command()
 async def quote(ctx, mood="random"):
 
-    q, author = get_quote()
+    quote, author = get_quote()
     mood = mood.lower()
 
     if mood == "sad":
@@ -93,31 +62,51 @@ async def quote(ctx, mood="random"):
 
     embed = discord.Embed(
         title=title,
-        description=f'> "{q}"\n\n> — {author}',
+        description=f'> "{quote}"\n\n> — {author}',
         color=color
     )
 
     await ctx.send(embed=embed)
 
 # =====================
-# DAILY SYSTEM (MULTI-SERVER)
+# DAILY SYSTEM (PRO FIXED)
 # =====================
+LAST_SENT_FILE = "last_sent.json"
+
+def load_last_sent():
+    try:
+        with open(LAST_SENT_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_last_sent(data):
+    with open(LAST_SENT_FILE, "w") as f:
+        json.dump(data, f)
+
+last_sent = load_last_sent()
+
 @tasks.loop(minutes=1)
 async def daily_quote():
 
-    now = datetime.utcnow().time()
-    target = time(hour=18, minute=0)
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
 
-    if now.hour != target.hour or now.minute != target.minute:
+    # prevent duplicates
+    if last_sent.get("date") == today:
         return
 
-    quote, author = get_quote()
+    # DAILY TIME (change if you want)
+    target_hour = 18
+    target_minute = 0
 
-    for guild_id, channel_id in channel_data.items():
+    if now.hour == target_hour and now.minute == target_minute:
 
-        channel = bot.get_channel(int(channel_id))
+        channel = bot.get_channel(CHANNEL_ID)
         if not channel:
-            continue
+            return
+
+        quote, author = get_quote()
 
         embed = discord.Embed(
             title="⌬・Quote of the Day",
@@ -127,8 +116,11 @@ async def daily_quote():
 
         await channel.send(embed=embed)
 
+        last_sent["date"] = today
+        save_last_sent(last_sent)
+
 # =====================
-# START
+# START BOT
 # =====================
 @bot.event
 async def on_ready():
